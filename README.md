@@ -1,6 +1,6 @@
 # AI Avatar Video Generator
 
-I wanted to make faceless-style AI avatar videos for TikTok without spending an hour bouncing between five different tools every time - write a script somewhere, generate a voice somewhere else, generate an avatar video somewhere else, add captions somewhere else, resize it, and finally upload. So I built this to collapse all of that into: write my scenes, hit generate, get one finished video.
+I wanted to make AI avatar style videos without spending an hour bouncing between five different tools every time - write a script somewhere, generate a voice somewhere else, generate an avatar video somewhere else, add captions somewhere else, resize it, and finally upload. So I built this to collapse all of that into: write my scenes, hit generate, get one finished video.
 
 It's not an app, it's not a product, it's a script (with a small local web UI on top) that I run on my own machine. You paste in your script, it goes and generates everything, and you get back a captioned, vertical, ready-to-post `.mp4`.
 
@@ -38,14 +38,6 @@ I looked at whether I could just build my own AI models for this and - no, not r
 - **Grok (via xAI's API)** writes the script when I don't feel like writing it myself, and picks a voice that fits each avatar when I don't specify one.
 
 So really, this repo isn't "an AI" - it's the glue code that makes five separate things talk to each other in the right order so I don't have to do it by hand every time.
-
-## What it deliberately doesn't do
-
-- **It doesn't post anywhere for you.** You watch the final video, you decide if it's good, you upload it yourself. I didn't want a tool that publishes on its own without me looking at it first.
-- **It doesn't force exact scene timing.** The narration you write drives how long a scene ends up being - there's no trimming or stretching audio to hit a number.
-- **It doesn't remember progress if something fails halfway.** If a run breaks partway through, you just re-run it. I didn't build resume logic because it wasn't worth the complexity for how I actually use this.
-
-None of that felt necessary for what I actually wanted, which was: write a script, get a video, upload it myself.
 
 ## Project layout
 
