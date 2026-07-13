@@ -1,125 +1,116 @@
-# AI Avatar TikTok Video Pipeline
+# AI Avatar Video Generator
 
-A CLI-driven pipeline that turns a scene-by-scene script (or a single topic prompt) into a finished, captioned, vertical (1080×1920) talking-avatar MP4 ready for manual TikTok upload.
+I wanted to make faceless-style AI avatar videos for TikTok without spending an hour bouncing between five different tools every time — write a script somewhere, generate a voice somewhere else, generate an avatar video somewhere else, add captions somewhere else, resize it, and finally upload. So I built this to collapse all of that into: write my scenes, hit generate, get one finished video.
 
-See [PRD.md](PRD.md) for full requirements, contracts, and test plan.
+It's not an app, it's not a product — it's a script (with a small local web UI on top) that I run on my own machine. You paste in your script, it goes and generates everything, and you get back a captioned, vertical, ready-to-post `.mp4`.
 
-## Prerequisites
+## How you actually use it
 
-- **Python 3.10+**
-- **ffmpeg** and **ffprobe** on your `PATH` ([install guide](https://ffmpeg.org/download.html))
-- API keys:
-  - [Anthropic](https://console.anthropic.com/) — script generation (prompt mode only)
-  - [Muapi](https://muapi.ai/access-keys) — portrait + lip-sync generation
+You write your video as a list of scenes — each one is a line of narration plus a description of who's saying it. Something like:
 
-## Setup
-
-```bash
-cd /path/to/Automation
-
-python3 -m venv .venv
-source .venv/bin/activate
-
-pip install -r requirements.txt
-
-cp .env.example .env
-# Edit .env with your API keys
+```json
+[
+  {
+    "narration": "Did you know octopuses have three hearts and blue blood?",
+    "avatar_image_prompt": "friendly female marine biologist, wetsuit, aquarium background"
+  },
+  {
+    "narration": "And when they swim, the main heart actually stops beating.",
+    "avatar_image_prompt": "dramatic close-up host, dark background, intense expression"
+  }
+]
 ```
 
-On first TTS run, Coqui XTTS-v2 will download its model weights (~1.8 GB). This is a one-time download.
+Same `avatar_image_prompt` on every scene keeps one consistent face throughout the video. Different prompts per scene means the avatar changes. Either works — it's just text.
 
-## Usage
+Paste that into the web UI, hit Generate, and it goes off and does everything: writes the voice audio, generates the avatar portrait, animates it speaking, stitches all the scenes together, burns in captions, crops to 9:16. You get a finished video back. Post it wherever you want — the tool doesn't touch your TikTok account, that part's still on you.
 
-### Web UI
+If you don't want to write a script yourself, you can also just give it a one-line topic and let an LLM write the whole thing for you.
 
-Run the local web interface from the project root:
+## Why I built it this way
+
+I looked at whether I could just build my own AI models for this and — no, not realistically, not without a research team and a pile of GPUs. So instead this leans entirely on things that already exist and are good at their one job:
+
+- **Coqui XTTS** does the voice. It's open source, runs locally on your own machine, completely free, and comes with 50+ built-in voices (plus voice cloning, if you ever want to go there).
+- **Muapi.ai** does the actual avatar generation. It's an API that gives access to a huge catalog of image and video models — I'm using Flux for the portrait and InfiniteTalk for the lip-sync — all through one API key, pay-per-generation, no subscription. This is the only piece that costs real money, and it's cheap, usually a few cents per generation.
+- **faster-whisper** handles captions. Also local, also free, and it gives word-level timing so the captions actually track what's being said instead of just sitting there as one static block.
+- **ffmpeg** stitches the per-scene clips together and crops everything to vertical at the end.
+- **Grok (via xAI's API)** writes the script when I don't feel like writing it myself, and picks a voice that fits each avatar when I don't specify one.
+
+So really, this repo isn't "an AI" — it's the glue code that makes five separate things talk to each other in the right order so I don't have to do it by hand every time.
+
+## What it deliberately doesn't do
+
+- **It doesn't post anywhere for you.** You watch the final video, you decide if it's good, you upload it yourself. I didn't want a tool that publishes on its own without me looking at it first.
+- **It doesn't force exact scene timing.** The narration you write drives how long a scene ends up being — there's no trimming or stretching audio to hit a number.
+- **It doesn't remember progress if something fails halfway.** If a run breaks partway through, you just re-run it. I didn't build resume logic because it wasn't worth the complexity for how I actually use this.
+
+None of that felt necessary for what I actually wanted, which was: write a script, get a video, upload it myself.
+
+## Project layout
+
+```
+.
+├── scripts/
+│   ├── app.py              — the local web UI (Flask). Run this, open localhost, paste scenes, generate.
+│   ├── generate.py          — the actual pipeline. Takes scenes (or a prompt), runs everything in
+│   │                          parallel (voices, portraits, avatar videos), stitches it all together.
+│   ├── script_gen.py        — talks to Grok: writes a full script from a topic, and picks a voice
+│   │                          to match an avatar when you don't specify one yourself.
+│   ├── tts_xtts.py          — wraps Coqui XTTS. Turns narration text into a voice audio file.
+│   ├── avatar_muapi.py      — talks to Muapi's API. Generates the portrait image, then animates it
+│   │                          speaking with the audio (lip-sync).
+│   ├── postprocess.py       — runs faster-whisper for word timing, then ffmpeg to burn in captions
+│   │                          and crop everything to 9:16.
+│   ├── config.py            — loads API keys and settings from .env
+│   ├── templates/           — the two HTML pages behind the web UI (input form, results page)
+│   └── scenes.example.json  — a working example you can run immediately
+├── requirements.txt
+├── .env.example
+└── output/                  — every run lands here as output/<run_id>/final.mp4, with all the
+                                intermediate files kept alongside it (portraits, raw audio, etc.)
+```
+
+## Setting it up
+
+You'll need Python 3.11+, ffmpeg installed, a Muapi.ai account with some credit loaded, and an xAI (Grok) API key if you want the auto-script/auto-voice features.
 
 ```bash
+git clone <your-repo-url>
+cd <repo-folder>
+python3.11 -m venv .venv
 source .venv/bin/activate
+pip install -r requirements.txt
+```
+
+macOS: `brew install ffmpeg`. Linux: `sudo apt install ffmpeg`.
+
+```bash
+cp .env.example .env
+```
+
+Drop your `MUAPI_API_KEY` and `XAI_API_KEY` into `.env`.
+
+Pre-download the voice model once, before you actually need it (it's about 2GB):
+
+```bash
+python3 -c "from TTS.api import TTS; TTS('tts_models/multilingual/multi-dataset/xtts_v2')"
+```
+
+Then run it:
+
+```bash
 python3 scripts/app.py
 ```
 
-Open [http://localhost:5001](http://localhost:5001) in your browser (port 5001 avoids a conflict with macOS AirPlay Receiver on port 5000). Paste your scenes JSON, click **Generate**, and watch live progress. When finished, the results page plays your video and shows where it was saved under `output/<run_id>/final.mp4`.
-
-Multiple jobs can run at the same time. Each submission gets its own job ID and background thread.
-
-The CLI below still works independently if you prefer the terminal.
-
-### Scene-list mode (recommended)
-
-Write a `scenes.json` file (see `scripts/scenes.example.json`) and run:
+Open `http://localhost:5000`, paste your scenes, hit Generate. Or skip the UI entirely and run it from the terminal:
 
 ```bash
-python -m scripts.generate --scenes scripts/scenes.example.json
+python3 scripts/generate.py --scenes scripts/scenes.example.json
 ```
 
-Each scene object requires:
+Either way, your finished video shows up at `output/<run_id>/final.mp4`.
 
-| Field | Required | Description |
-|---|---|---|
-| `narration` | Yes | Spoken text for this scene |
-| `avatar_image_prompt` | Yes | Portrait prompt for Muapi image generation |
-| `target_seconds` | No | Pacing guide only — **not enforced** (see PRD Edge Case E7) |
+## License
 
-**Avatar reuse:** scenes with the **exact same** `avatar_image_prompt` string share one portrait (case- and whitespace-sensitive). Near-identical prompts with different casing or trailing spaces will generate separate portraits.
-
-### Prompt mode
-
-Auto-generate script, caption, hashtags, and avatar prompt from a topic:
-
-```bash
-python -m scripts.generate --prompt "3 productivity hacks for remote workers"
-```
-
-Generated metadata is saved to `output/<run_id>/content.json`.
-
-## Output
-
-Each run creates a timestamped folder:
-
-```
-output/<run_id>/
-  scene_00.wav          # per-scene TTS audio
-  portrait_00.png       # unique portraits only (cached by prompt)
-  scene_00.mp4          # per-scene talking video
-  stitched.mp4          # concatenated scenes (multi-scene runs)
-  captions.srt          # word-timed subtitles
-  final.mp4             # captioned 1080×1920 output
-```
-
-## Configuration
-
-| Variable | Required | Default |
-|---|---|---|
-| `ANTHROPIC_API_KEY` | Yes | — |
-| `MUAPI_API_KEY` | Yes | — |
-| `MUAPI_BASE_URL` | No | `https://api.muapi.ai/api/v1` |
-| `MUAPI_PORTRAIT_ENDPOINT` | No | `flux-schnell-image` |
-| `MUAPI_LIPSYNC_ENDPOINT` | No | `kling-v2-avatar-standard` |
-
-Verify Muapi endpoint names against the [Muapi docs](https://muapi.ai/docs/api-reference) before your first real run (see PRD Milestone M2).
-
-## Running tests
-
-```bash
-pytest tests/ -v
-```
-
-Unit tests mock external APIs. Integration and end-to-end tests require live API keys and are skipped by default.
-
-## Pipeline stages
-
-1. **Validate** input (scenes JSON or prompt)
-2. **TTS** — local Coqui XTTS-v2 (free)
-3. **Portrait** — Muapi text-to-image (cached by exact prompt string)
-4. **Talking video** — Muapi lip-sync model
-5. **Concat** — ffmpeg stitches scene clips (skipped for single-scene runs)
-6. **Postprocess** — faster-whisper captions + ffmpeg burn-in + 9:16 crop
-
-## Known limitations
-
-- No auto-posting to TikTok
-- `target_seconds` is advisory; actual duration depends on TTS output
-- No automatic retry on Muapi failures
-- Each run gets a fresh `run_id`; resume-from-failure across runs is not supported
-- Portrait caching uses exact string matching, not semantic similarity
+MIT — do whatever you want with it.
