@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Avatar Video</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #000000;
+      --surface: #1c1c1e;
+      --surface-elevated: #2c2c2e;
+      --text: #f5f5f7;
+      --text-secondary: #98989d;
+      --accent: #0a84ff;
+      --accent-hover: #409cff;
+      --border: #38383a;
+      --error: #ff453a;
+      --radius: 12px;
+      --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif;
+      --mono: "SF Mono", ui-monospace, Menlo, Monaco, monospace;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: var(--font);
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .page {
+      max-width: 720px;
+      margin: 0 auto;
+      padding: 48px 24px 80px;
+    }
+
+    header {
+      margin-bottom: 32px;
+    }
+
+    h1 {
+      font-size: 28px;
+      font-weight: 600;
+      letter-spacing: -0.02em;
+      margin-bottom: 8px;
+    }
+
+    .subtitle {
+      color: var(--text-secondary);
+      font-size: 15px;
+    }
+
+    .instruction {
+      color: var(--text-secondary);
+      font-size: 14px;
+      margin-bottom: 12px;
+    }
+
+    textarea {
+      width: 100%;
+      min-height: 360px;
+      padding: 16px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: var(--surface);
+      color: var(--text);
+      font-family: var(--mono);
+      font-size: 13px;
+      line-height: 1.6;
+      resize: vertical;
+      outline: none;
+      transition: border-color 0.2s ease;
+    }
+
+    textarea:focus {
+      border-color: var(--accent);
+    }
+
+    .actions {
+      margin-top: 20px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    button {
+      appearance: none;
+      border: none;
+      border-radius: 980px;
+      background: var(--accent);
+      color: #ffffff;
+      font-family: var(--font);
+      font-size: 15px;
+      font-weight: 500;
+      padding: 12px 28px;
+      cursor: pointer;
+      transition: background 0.2s ease, opacity 0.2s ease;
+    }
+
+    button:hover:not(:disabled) {
+      background: var(--accent-hover);
+    }
+
+    button:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+    }
+
+    .error {
+      margin-top: 16px;
+      padding: 14px 16px;
+      border-radius: var(--radius);
+      background: rgba(255, 69, 58, 0.12);
+      color: var(--error);
+      font-size: 14px;
+      display: none;
+    }
+
+    .error.visible {
+      display: block;
+    }
+
+    .loading {
+      display: none;
+      margin-top: 32px;
+      padding: 28px;
+      border-radius: var(--radius);
+      background: var(--surface);
+      text-align: center;
+    }
+
+    .loading.visible {
+      display: block;
+    }
+
+    .spinner {
+      width: 32px;
+      height: 32px;
+      margin: 0 auto 16px;
+      border: 2px solid var(--border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .stage-label {
+      font-size: 16px;
+      font-weight: 500;
+      margin-bottom: 4px;
+    }
+
+    .stage-progress {
+      color: var(--text-secondary);
+      font-size: 14px;
+      font-variant-numeric: tabular-nums;
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <header>
+      <h1>Avatar Video</h1>
+      <p class="subtitle">Create a captioned talking avatar video from a scene script.</p>
+    </header>
+
+    <p class="instruction">Paste your scenes as JSON in this format, then click Generate.</p>
+
+    <textarea id="scenes" spellcheck="false">{{ example_json }}</textarea>
+
+    <div class="actions">
+      <button id="generate-btn" type="button">Generate</button>
+    </div>
+
+    <div id="error" class="error" role="alert"></div>
+
+    <div id="loading" class="loading" aria-live="polite">
+      <div class="spinner" aria-hidden="true"></div>
+      <p class="stage-label" id="stage-label">Starting</p>
+      <p class="stage-progress" id="stage-progress"></p>
+    </div>
+  </div>
+
+  <script>
+    const scenesEl = document.getElementById("scenes");
+    const generateBtn = document.getElementById("generate-btn");
+    const errorEl = document.getElementById("error");
+    const loadingEl = document.getElementById("loading");
+    const stageLabelEl = document.getElementById("stage-label");
+    const stageProgressEl = document.getElementById("stage-progress");
+
+    const stageLabels = {
+      starting: "Starting",
+      tts: "Generating voices",
+      portrait: "Generating portraits",
+      talking_video: "Generating lip sync videos",
+      postprocess: "Adding captions and formatting",
+      done: "Complete",
+    };
+
+    function showError(message) {
+      errorEl.textContent = message;
+      errorEl.classList.add("visible");
+    }
+
+    function hideError() {
+      errorEl.textContent = "";
+      errorEl.classList.remove("visible");
+    }
+
+    function setLoading(active) {
+      loadingEl.classList.toggle("visible", active);
+      generateBtn.disabled = active;
+      scenesEl.disabled = active;
+    }
+
+    function updateProgress(job) {
+      const label = job.stage_label || stageLabels[job.stage] || job.stage || "Working";
+      stageLabelEl.textContent = label;
+      if (job.total > 0 && job.stage !== "done") {
+        stageProgressEl.textContent = `${job.done} / ${job.total}`;
+      } else {
+        stageProgressEl.textContent = "";
+      }
+    }
+
+    async function pollStatus(jobId) {
+      const response = await fetch(`/status/${jobId}`);
+      if (!response.ok) {
+        throw new Error("Could not fetch job status");
+      }
+      return response.json();
+    }
+
+    generateBtn.addEventListener("click", async () => {
+      hideError();
+      setLoading(true);
+      stageLabelEl.textContent = "Starting";
+      stageProgressEl.textContent = "";
+
+      let jobId;
+      try {
+        const response = await fetch("/generate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: scenesEl.value,
+        });
+        const payload = await response.json();
+        if (!response.ok) {
+          throw new Error(payload.error || "Generation failed to start");
+        }
+        jobId = payload.job_id;
+      } catch (err) {
+        setLoading(false);
+        showError(err.message);
+        return;
+      }
+
+      const interval = setInterval(async () => {
+        try {
+          const job = await pollStatus(jobId);
+          updateProgress(job);
+
+          if (job.status === "complete") {
+            clearInterval(interval);
+            window.location.href = `/result/${jobId}`;
+          } else if (job.status === "failed") {
+            clearInterval(interval);
+            setLoading(false);
+            let message = job.error || "Generation failed";
+            if (job.failed_stage) {
+              message = `${job.failed_stage}: ${message}`;
+            }
+            showError(message);
+          }
+        } catch (err) {
+          clearInterval(interval);
+          setLoading(false);
+          showError(err.message);
+        }
+      }, 2000);
+    });
+  </script>
+</body>
+</html>

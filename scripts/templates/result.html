@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Your Video</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #000000;
+      --surface: #1c1c1e;
+      --text: #f5f5f7;
+      --text-secondary: #98989d;
+      --accent: #0a84ff;
+      --accent-hover: #409cff;
+      --border: #38383a;
+      --radius: 12px;
+      --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif;
+      --mono: "SF Mono", ui-monospace, Menlo, Monaco, monospace;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: var(--font);
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .page {
+      max-width: 480px;
+      margin: 0 auto;
+      padding: 48px 24px 80px;
+    }
+
+    h1 {
+      font-size: 28px;
+      font-weight: 600;
+      letter-spacing: -0.02em;
+      margin-bottom: 8px;
+    }
+
+    .subtitle {
+      color: var(--text-secondary);
+      font-size: 15px;
+      margin-bottom: 32px;
+    }
+
+    .player-wrap {
+      border-radius: var(--radius);
+      overflow: hidden;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      margin-bottom: 24px;
+    }
+
+    video {
+      display: block;
+      width: 100%;
+      background: #000;
+    }
+
+    .path-label {
+      color: var(--text-secondary);
+      font-size: 13px;
+      margin-bottom: 6px;
+    }
+
+    .path-value {
+      font-family: var(--mono);
+      font-size: 12px;
+      color: var(--text);
+      word-break: break-all;
+      padding: 14px 16px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      margin-bottom: 32px;
+    }
+
+    a {
+      color: var(--accent);
+      text-decoration: none;
+      font-size: 15px;
+      font-weight: 500;
+    }
+
+    a:hover {
+      color: var(--accent-hover);
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <h1>Your Video</h1>
+    <p class="subtitle">Ready to review and upload.</p>
+
+    <div class="player-wrap">
+      <video controls playsinline src="{{ url_for('video', job_id=job_id) }}"></video>
+    </div>
+
+    <p class="path-label">Saved to</p>
+    <p class="path-value">output/{{ run_id }}/final.mp4</p>
+
+    <a href="/">Generate another</a>
+  </div>
+</body>
+</html>
